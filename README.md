@@ -1,5 +1,6 @@
 # ![Phinx](media/phinx.png)  
-[![Chat on Discord](https://img.shields.io/discord/754884471324672040?style=for-the-badge)](https://discord.gg/tPWjMwK) [![Follow on Bluesky](https://img.shields.io/badge/Bluesky-tinyBigGAMES-blue?style=for-the-badge&logo=bluesky)](https://bsky.app/profile/tinybiggames.com)
+[![Chat on Discord](https://img.shields.io/discord/754884471324672040?style=for-the-badge)](https://discord.gg/tPWjMwK) [![Follow on Bluesky](https://img.shields.io/badge/Bluesky-tinyBigGAMES-blue?style=for-the-badge&logo=bluesky)](https://bsky.app/profile/tinybiggames.com) [![Reddit](https://img.shields.io/badge/Reddit-Phinx-red?style=for-the-badge&logo=reddit)](https://www.reddit.com/r/Phinx/)
+
 
 ### A High-Performance AI Inference Library for ONNX and Phi-4
 

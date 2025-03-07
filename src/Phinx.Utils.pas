@@ -393,7 +393,25 @@ type
     class function  ReadKey(): WideChar; static;
     class function  ReadLnX(const AAllowedChars: phCharSet; AMaxLength: Integer; const AColor: string=phCSIFGWhite): string; static;
 
-    class procedure Pause(const AForcePause: Boolean=False; AColor: string=phCSIFGWhite; const AMsg: string=''); static;
+    /// <summary>
+    ///   Pauses execution and waits for user input in the active console.
+    ///   This method is typically used to create a breakpoint in execution, allowing
+    ///   the user to acknowledge a message before continuing.
+    /// </summary>
+    /// <param name="AForcePause">
+    ///   If set to <c>True</c>, the pause is enforced even if no console is detected.
+    ///   If <c>False</c>, the pause only occurs if a console is present.
+    /// </param>
+    /// <param name="AColor">
+    ///   The foreground color used to display the message in the console.
+    ///   Defaults to <c>phCSIFGWhite</c>.
+    /// </param>
+    /// <param name="AMsg">
+    ///   An optional message to display before pausing execution.
+    ///   If no message is provided, the function simply waits for user input.
+    /// </param>
+    class procedure Pause(const AForcePause: Boolean = False; AColor: string = phCSIFGWhite;
+      const AMsg: string = ''); static;
 
     class function  WrapTextEx(const ALine: string; AMaxCol: Integer; const ABreakChars: phCharSet=[' ', '-', ',', ':', #9]): string; static;
     class procedure Teletype(const AText: string; const AColor: string=phCSIFGWhite; const AMargin: Integer=10; const AMinDelay: Integer=0; const AMaxDelay: Integer=3; const ABreakKey: Byte=VK_ESCAPE); static;
