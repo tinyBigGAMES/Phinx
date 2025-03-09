@@ -64,6 +64,13 @@ Get the **Phinx Model** from Hugging Face:
 
 > **⚠️ Note:** This repository is currently in the setup phase. While documentation is being prepared, the **code is fully functional and stable**. Stay tuned—this README and additional resources will be updated soon! 🚀
 
+## 📺 Media
+🌊 Deep Dive Podcast  
+Discover in-depth discussions and insights about Sophora and its innovative features. 🚀✨
+
+🎥 Phinx Feature Videos  
+Explore videos showcasing the powerful capabilities of the Phinx library, including tutorials, demonstrations, and real-world applications. 🎬🔥
+
 ## 💬 Support and Resources
 
 - 🐞 **Report Issues:** [Issue Tracker](https://github.com/tinyBigGAMES/Phinx/issues)
