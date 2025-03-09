@@ -71,6 +71,14 @@ Discover in-depth discussions and insights about Sophora and its innovative feat
 🎥 Phinx Feature Videos  
 Explore videos showcasing the powerful capabilities of the Phinx library, including tutorials, demonstrations, and real-world applications. 🎬🔥
 
+
+https://github.com/user-attachments/assets/d58bc2d1-bef5-458d-9377-6b1235c51972
+
+
+https://github.com/user-attachments/assets/c166106a-4266-4b0f-9d95-42d1b2cc0921
+
+
+
 ## 💬 Support and Resources
 
 - 🐞 **Report Issues:** [Issue Tracker](https://github.com/tinyBigGAMES/Phinx/issues)
