@@ -532,12 +532,16 @@ const
   OgaElementType_float64 = 11;
   OgaElementType_uint32 = 12;
   OgaElementType_uint64 = 13;
+  OgaElementType_complex64 = 14;
+  OgaElementType_complex128 = 15;
+  OgaElementType_bfloat16 = 16;
 
 type
   // Forward declarations
   PPUTF8Char = ^PUTF8Char;
   PPPUTF8Char = ^PPUTF8Char;
   PInt32 = ^Int32;
+  PPInt32 = ^PInt32;
   PNativeUInt = ^NativeUInt;
   PInt64 = ^Int64;
   Psqlite3_file = ^sqlite3_file;
@@ -1374,9 +1378,11 @@ var
   OgaSequencesGetSequenceData: function(const sequences: POgaSequences; sequence_index: NativeUInt): PInt32; cdecl;
   OgaLoadImage: function(const image_path: PUTF8Char; images: PPOgaImages): POgaResult; cdecl;
   OgaLoadImages: function(const image_paths: POgaStringArray; images: PPOgaImages): POgaResult; cdecl;
+  OgaLoadImagesFromBuffers: function(image_data: PPointer; const image_data_sizes: PNativeUInt; count: NativeUInt; images: PPOgaImages): POgaResult; cdecl;
   OgaDestroyImages: procedure(images: POgaImages); cdecl;
   OgaLoadAudio: function(const audio_path: PUTF8Char; audios: PPOgaAudios): POgaResult; cdecl;
   OgaLoadAudios: function(const audio_paths: POgaStringArray; audios: PPOgaAudios): POgaResult; cdecl;
+  OgaLoadAudiosFromBuffers: function(audio_data: PPointer; const audio_data_sizes: PNativeUInt; count: NativeUInt; audios: PPOgaAudios): POgaResult; cdecl;
   OgaDestroyAudios: procedure(audios: POgaAudios); cdecl;
   OgaCreateRuntimeSettings: function(&out: PPOgaRuntimeSettings): POgaResult; cdecl;
   OgaDestroyRuntimeSettings: procedure(settings: POgaRuntimeSettings); cdecl;
@@ -1385,9 +1391,12 @@ var
   OgaConfigClearProviders: function(config: POgaConfig): POgaResult; cdecl;
   OgaConfigAppendProvider: function(config: POgaConfig; const provider: PUTF8Char): POgaResult; cdecl;
   OgaConfigSetProviderOption: function(config: POgaConfig; const provider: PUTF8Char; const key: PUTF8Char; const value: PUTF8Char): POgaResult; cdecl;
+  OgaConfigOverlay: function(config: POgaConfig; const json: PUTF8Char): POgaResult; cdecl;
   OgaCreateModel: function(const config_path: PUTF8Char; &out: PPOgaModel): POgaResult; cdecl;
   OgaCreateModelFromConfig: function(const config: POgaConfig; &out: PPOgaModel): POgaResult; cdecl;
   OgaCreateModelWithRuntimeSettings: function(const config_path: PUTF8Char; const settings: POgaRuntimeSettings; &out: PPOgaModel): POgaResult; cdecl;
+  OgaModelGetType: function(const model: POgaModel; &out: PPUTF8Char): POgaResult; cdecl;
+  OgaModelGetDeviceType: function(const model: POgaModel; &out: PPUTF8Char): POgaResult; cdecl;
   OgaDestroyConfig: procedure(config: POgaConfig); cdecl;
   OgaDestroyModel: procedure(model: POgaModel); cdecl;
   OgaCreateGeneratorParams: function(const model: POgaModel; &out: PPOgaGeneratorParams): POgaResult; cdecl;
@@ -1405,6 +1414,7 @@ var
   OgaGenerator_AppendTokenSequences: function(oga_generator: POgaGenerator; const p_sequences: POgaSequences): POgaResult; cdecl;
   OgaGenerator_AppendTokens: function(oga_generator: POgaGenerator; const input_ids: PInt32; input_ids_count: NativeUInt): POgaResult; cdecl;
   OgaGenerator_GenerateNextToken: function(generator: POgaGenerator): POgaResult; cdecl;
+  OgaGenerator_GetNextTokens: function(const generator: POgaGenerator; &out: PPInt32; out_count: PNativeUInt): POgaResult; cdecl;
   OgaGenerator_SetRuntimeOption: function(generator: POgaGenerator; const key: PUTF8Char; const value: PUTF8Char): POgaResult; cdecl;
   OgaGenerator_RewindTo: function(generator: POgaGenerator; new_length: NativeUInt): POgaResult; cdecl;
   OgaGenerator_GetOutput: function(const generator: POgaGenerator; const name: PUTF8Char; &out: PPOgaTensor): POgaResult; cdecl;
@@ -1417,6 +1427,8 @@ var
   OgaCreateMultiModalProcessor: function(const model: POgaModel; &out: PPOgaMultiModalProcessor): POgaResult; cdecl;
   OgaDestroyMultiModalProcessor: procedure(processor: POgaMultiModalProcessor); cdecl;
   OgaTokenizerEncode: function(const p1: POgaTokenizer; const str: PUTF8Char; sequences: POgaSequences): POgaResult; cdecl;
+  OgaTokenizerEncodeBatch: function(const p1: POgaTokenizer; strings: PPUTF8Char; count: NativeUInt; &out: PPOgaTensor): POgaResult; cdecl;
+  OgaTokenizerDecodeBatch: function(const p1: POgaTokenizer; const tensor: POgaTensor; &out: PPOgaStringArray): POgaResult; cdecl;
   OgaTokenizerToTokenId: function(const tokenizer: POgaTokenizer; const str: PUTF8Char; token_id: PInt32): POgaResult; cdecl;
   OgaProcessorProcessImages: function(const p1: POgaMultiModalProcessor; const prompt: PUTF8Char; const images: POgaImages; input_tensors: PPOgaNamedTensors): POgaResult; cdecl;
   OgaProcessorProcessAudios: function(const p1: POgaMultiModalProcessor; const audios: POgaAudios; input_tensors: PPOgaNamedTensors): POgaResult; cdecl;
@@ -1433,13 +1445,20 @@ var
   OgaTensorGetShapeRank: function(p1: POgaTensor; &out: PNativeUInt): POgaResult; cdecl;
   OgaTensorGetShape: function(p1: POgaTensor; shape_dims: PInt64; shape_dims_count: NativeUInt): POgaResult; cdecl;
   OgaTensorGetData: function(p1: POgaTensor; &out: PPointer): POgaResult; cdecl;
+  OgaCreateNamedTensors: function(&out: PPOgaNamedTensors): POgaResult; cdecl;
+  OgaNamedTensorsGet: function(const named_tensors: POgaNamedTensors; const name: PUTF8Char; &out: PPOgaTensor): POgaResult; cdecl;
+  OgaNamedTensorsSet: function(named_tensors: POgaNamedTensors; const name: PUTF8Char; tensor: POgaTensor): POgaResult; cdecl;
+  OgaNamedTensorsDelete: function(named_tensors: POgaNamedTensors; const name: PUTF8Char): POgaResult; cdecl;
+  OgaNamedTensorsCount: function(const named_tensors: POgaNamedTensors; &out: PNativeUInt): POgaResult; cdecl;
+  OgaNamedTensorsGetNames: function(const named_tensors: POgaNamedTensors; &out: PPOgaStringArray): POgaResult; cdecl;
   OgaSetCurrentGpuDeviceId: function(device_id: Integer): POgaResult; cdecl;
   OgaGetCurrentGpuDeviceId: function(device_id: PInteger): POgaResult; cdecl;
   OgaCreateStringArray: function(&out: PPOgaStringArray): POgaResult; cdecl;
   OgaCreateStringArrayFromStrings: function(const strs: PPUTF8Char; count: NativeUInt; &out: PPOgaStringArray): POgaResult; cdecl;
   OgaDestroyStringArray: procedure(string_array: POgaStringArray); cdecl;
   OgaStringArrayAddString: function(string_array: POgaStringArray; const str: PUTF8Char): POgaResult; cdecl;
-  OgaStringArrayGetCount: function(const string_array: POgaStringArray): NativeUInt; cdecl;
+  OgaStringArrayGetCount: function(const string_array: POgaStringArray; &out: PNativeUInt): POgaResult; cdecl;
+  OgaStringArrayGetString: function(const string_array: POgaStringArray; index: NativeUInt; &out: PPUTF8Char): POgaResult; cdecl;
   OgaCreateAdapters: function(const model: POgaModel; &out: PPOgaAdapters): POgaResult; cdecl;
   OgaDestroyAdapters: procedure(adapters: POgaAdapters); cdecl;
   OgaLoadAdapter: function(adapters: POgaAdapters; const adapter_file_path: PUTF8Char; const adapter_name: PUTF8Char): POgaResult; cdecl;
@@ -1733,6 +1752,7 @@ begin
   OgaAppendTokenToSequence := GetProcAddress(aDLLHandle, 'OgaAppendTokenToSequence');
   OgaConfigAppendProvider := GetProcAddress(aDLLHandle, 'OgaConfigAppendProvider');
   OgaConfigClearProviders := GetProcAddress(aDLLHandle, 'OgaConfigClearProviders');
+  OgaConfigOverlay := GetProcAddress(aDLLHandle, 'OgaConfigOverlay');
   OgaConfigSetProviderOption := GetProcAddress(aDLLHandle, 'OgaConfigSetProviderOption');
   OgaCreateAdapters := GetProcAddress(aDLLHandle, 'OgaCreateAdapters');
   OgaCreateConfig := GetProcAddress(aDLLHandle, 'OgaCreateConfig');
@@ -1742,6 +1762,7 @@ begin
   OgaCreateModelFromConfig := GetProcAddress(aDLLHandle, 'OgaCreateModelFromConfig');
   OgaCreateModelWithRuntimeSettings := GetProcAddress(aDLLHandle, 'OgaCreateModelWithRuntimeSettings');
   OgaCreateMultiModalProcessor := GetProcAddress(aDLLHandle, 'OgaCreateMultiModalProcessor');
+  OgaCreateNamedTensors := GetProcAddress(aDLLHandle, 'OgaCreateNamedTensors');
   OgaCreateRuntimeSettings := GetProcAddress(aDLLHandle, 'OgaCreateRuntimeSettings');
   OgaCreateSequences := GetProcAddress(aDLLHandle, 'OgaCreateSequences');
   OgaCreateStringArray := GetProcAddress(aDLLHandle, 'OgaCreateStringArray');
@@ -1771,6 +1792,7 @@ begin
   OgaGenerator_AppendTokenSequences := GetProcAddress(aDLLHandle, 'OgaGenerator_AppendTokenSequences');
   OgaGenerator_GenerateNextToken := GetProcAddress(aDLLHandle, 'OgaGenerator_GenerateNextToken');
   OgaGenerator_GetLogits := GetProcAddress(aDLLHandle, 'OgaGenerator_GetLogits');
+  OgaGenerator_GetNextTokens := GetProcAddress(aDLLHandle, 'OgaGenerator_GetNextTokens');
   OgaGenerator_GetOutput := GetProcAddress(aDLLHandle, 'OgaGenerator_GetOutput');
   OgaGenerator_GetSequenceCount := GetProcAddress(aDLLHandle, 'OgaGenerator_GetSequenceCount');
   OgaGenerator_GetSequenceData := GetProcAddress(aDLLHandle, 'OgaGenerator_GetSequenceData');
@@ -1789,8 +1811,17 @@ begin
   OgaLoadAdapter := GetProcAddress(aDLLHandle, 'OgaLoadAdapter');
   OgaLoadAudio := GetProcAddress(aDLLHandle, 'OgaLoadAudio');
   OgaLoadAudios := GetProcAddress(aDLLHandle, 'OgaLoadAudios');
+  OgaLoadAudiosFromBuffers := GetProcAddress(aDLLHandle, 'OgaLoadAudiosFromBuffers');
   OgaLoadImage := GetProcAddress(aDLLHandle, 'OgaLoadImage');
   OgaLoadImages := GetProcAddress(aDLLHandle, 'OgaLoadImages');
+  OgaLoadImagesFromBuffers := GetProcAddress(aDLLHandle, 'OgaLoadImagesFromBuffers');
+  OgaModelGetDeviceType := GetProcAddress(aDLLHandle, 'OgaModelGetDeviceType');
+  OgaModelGetType := GetProcAddress(aDLLHandle, 'OgaModelGetType');
+  OgaNamedTensorsCount := GetProcAddress(aDLLHandle, 'OgaNamedTensorsCount');
+  OgaNamedTensorsDelete := GetProcAddress(aDLLHandle, 'OgaNamedTensorsDelete');
+  OgaNamedTensorsGet := GetProcAddress(aDLLHandle, 'OgaNamedTensorsGet');
+  OgaNamedTensorsGetNames := GetProcAddress(aDLLHandle, 'OgaNamedTensorsGetNames');
+  OgaNamedTensorsSet := GetProcAddress(aDLLHandle, 'OgaNamedTensorsSet');
   OgaProcessorDecode := GetProcAddress(aDLLHandle, 'OgaProcessorDecode');
   OgaProcessorProcessAudios := GetProcAddress(aDLLHandle, 'OgaProcessorProcessAudios');
   OgaProcessorProcessImages := GetProcAddress(aDLLHandle, 'OgaProcessorProcessImages');
@@ -1807,12 +1838,15 @@ begin
   OgaShutdown := GetProcAddress(aDLLHandle, 'OgaShutdown');
   OgaStringArrayAddString := GetProcAddress(aDLLHandle, 'OgaStringArrayAddString');
   OgaStringArrayGetCount := GetProcAddress(aDLLHandle, 'OgaStringArrayGetCount');
+  OgaStringArrayGetString := GetProcAddress(aDLLHandle, 'OgaStringArrayGetString');
   OgaTensorGetData := GetProcAddress(aDLLHandle, 'OgaTensorGetData');
   OgaTensorGetShape := GetProcAddress(aDLLHandle, 'OgaTensorGetShape');
   OgaTensorGetShapeRank := GetProcAddress(aDLLHandle, 'OgaTensorGetShapeRank');
   OgaTensorGetType := GetProcAddress(aDLLHandle, 'OgaTensorGetType');
   OgaTokenizerDecode := GetProcAddress(aDLLHandle, 'OgaTokenizerDecode');
+  OgaTokenizerDecodeBatch := GetProcAddress(aDLLHandle, 'OgaTokenizerDecodeBatch');
   OgaTokenizerEncode := GetProcAddress(aDLLHandle, 'OgaTokenizerEncode');
+  OgaTokenizerEncodeBatch := GetProcAddress(aDLLHandle, 'OgaTokenizerEncodeBatch');
   OgaTokenizerStreamDecode := GetProcAddress(aDLLHandle, 'OgaTokenizerStreamDecode');
   OgaTokenizerToTokenId := GetProcAddress(aDLLHandle, 'OgaTokenizerToTokenId');
   OgaUnloadAdapter := GetProcAddress(aDLLHandle, 'OgaUnloadAdapter');

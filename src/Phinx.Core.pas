@@ -51,7 +51,8 @@ const
   ///   Specifies the default maximum context length for processing input data.
   ///   This value determines how much context is retained during inference.
   /// </summary>
-  cphDefaultMaxContext = 7680;
+  //cphDefaultMaxContext = 7680;
+  cphDefaultMaxContext = 1024;
 
   /// <summary>
   ///   Represents the status message indicating the start of an operation or process.
@@ -151,11 +152,30 @@ type
     FMessages: TStringList;
     FSystemMessage: string;
     FLastUserMessage: string;
+    FImageList: TStringList;
+
+    FDiversityPenalty: Single;
+    FDoSample: Boolean;
+    FEarlyStopping: Boolean;
+    FLengthPenalty: Single;
+    FMaxLength: UInt32;
+    FMinLength: UInt32;
+    FNoRepeatNumGramSize: UInt32;
+    FNumBeams: UInt32;
+    FNumReturnSequences: UInt32;
+    FPastPresentShareBuffer: Boolean;
+    FRepetitionPenalty: Single;
+    FTemperature: Single;
+    FTopK: UInt32;
+    FTopP: Single;
+
 
   function  LoadClibsDLL(): Boolean;
   procedure UnloadCLibsDLL();
   function  CheckResult(const AResult: POgaResult): Boolean;
   function  GetModelBasePath(): string;
+  procedure SetMaxLength(const AValue: UInt32);
+  procedure LoadImages();
   function  OnCancelInference(): Boolean;
   procedure OnNextToken(const AToken: string);
   procedure OnInferenceStart();
@@ -203,6 +223,93 @@ type
     ///   Default value is <c>True</c>.
     /// </summary>
     property Stream: Boolean read FStream write FStream default True;
+
+
+    /// <summary>
+    ///   Controls the diversity penalty applied during inference.
+    ///   A higher value discourages repetitive patterns in the generated text.
+    /// </summary>
+    property DiversityPenalty: Single read FDiversityPenalty write FDiversityPenalty;
+
+    /// <summary>
+    ///   Determines whether sampling is used for text generation.
+    ///   If <c>True</c>, sampling techniques such as Top-K or Top-P will be applied.
+    ///   If <c>False</c>, deterministic generation (e.g., greedy decoding) is used.
+    /// </summary>
+    property DoSample: Boolean read FDoSample write FDoSample;
+
+    /// <summary>
+    ///   Enables early stopping when generating text.
+    ///   If <c>True</c>, generation stops when all output sequences reach an end condition.
+    /// </summary>
+    property EarlyStopping: Boolean read FEarlyStopping write FEarlyStopping;
+
+    /// <summary>
+    ///   Controls the length penalty applied during sequence generation.
+    ///   Higher values encourage longer outputs, while lower values discourage verbosity.
+    /// </summary>
+    property LengthPenalty: Single read FLengthPenalty write FLengthPenalty;
+
+    /// <summary>
+    ///   Specifies the maximum length of the generated sequence.
+    ///   Once this length is reached, the generation process stops.
+    /// </summary>
+    property MaxLength: UInt32 read FMaxLength write SetMaxLength;
+
+    /// <summary>
+    ///   Specifies the minimum length of the generated sequence.
+    ///   The model will not produce outputs shorter than this value.
+    /// </summary>
+    property MinLength: UInt32 read FMinLength write FMinLength;
+
+    /// <summary>
+    ///   Prevents repetition of phrases by enforcing a no-repeat n-gram rule.
+    ///   This property specifies the size of the n-gram that should not be repeated.
+    /// </summary>
+    property NoRepeatNumGramSize: UInt32 read FNoRepeatNumGramSize write FNoRepeatNumGramSize;
+
+    /// <summary>
+    ///   Defines the number of beams used for beam search.
+    ///   Higher values improve search quality but increase computational cost.
+    /// </summary>
+    property NumBeams: UInt32 read FNumBeams write FNumBeams;
+
+    /// <summary>
+    ///   Specifies how many different sequences should be returned after generation.
+    ///   When greater than 1, multiple possible outputs are generated.
+    /// </summary>
+    property NumReturnSequences: UInt32 read FNumReturnSequences write FNumReturnSequences;
+
+    /// <summary>
+    ///   Determines whether past-present key-value buffers are shared across decoding steps.
+    ///   If <c>True</c>, memory efficiency is improved by reusing computation from previous steps.
+    /// </summary>
+    property PastPresentShareBuffer: Boolean read FPastPresentShareBuffer write FPastPresentShareBuffer;
+
+    /// <summary>
+    ///   Controls the penalty applied for token repetition.
+    ///   A value greater than 1 discourages repeated words, reducing redundancy.
+    /// </summary>
+    property RepetitionPenalty: Single read FRepetitionPenalty write FRepetitionPenalty;
+
+    /// <summary>
+    ///   Adjusts the randomness of token selection during generation.
+    ///   Higher values increase randomness, while lower values make outputs more deterministic.
+    /// </summary>
+    property Temperature: Single read FTemperature write FTemperature;
+
+    /// <summary>
+    ///   Sets the Top-K sampling parameter, limiting token selection to the top K most probable tokens.
+    ///   A lower value makes generation more focused, while a higher value increases randomness.
+    /// </summary>
+    property TopK: UInt32 read FTopK write FTopK;
+
+    /// <summary>
+    ///   Sets the Top-P (nucleus) sampling parameter, restricting token selection
+    ///   to a cumulative probability threshold.
+    ///   This controls output randomness while ensuring diversity.
+    /// </summary>
+    property TopP: Single read FTopP write FTopP;
 
     /// <summary>
     ///   Initializes a new instance of the <c>TPhinx</c> class.
@@ -256,6 +363,24 @@ type
     procedure SetTokenMaxLineLength(const AValue: UInt32);
 
     /// <summary>
+    ///   Clears all stored images from memory.
+    ///   This resets the image processing context, ensuring no residual images remain.
+    /// </summary>
+    procedure ClearImages();
+
+    /// <summary>
+    ///   Adds an image to the processing pipeline from the specified file.
+    ///   The image is loaded and made available for inference or further processing.
+    /// </summary>
+    /// <param name="AFilename">
+    ///   The full path to the image file that should be added.
+    /// </param>
+    /// <returns>
+    ///   <c>True</c> if the image was successfully loaded and added; otherwise, <c>False</c>.
+    /// </returns>
+    function AddImage(const AFilename: string): Boolean;
+
+    /// <summary>
     ///   Clears all stored messages, including system, user, and assistant messages.
     ///   This resets the conversation history, ensuring a fresh context for new interactions.
     /// </summary>
@@ -286,7 +411,7 @@ type
     /// <param name="AContent">
     ///   The content of the user message to be added.
     /// </param>
-    procedure AddUserMessage(const AContent: string);
+    function AddUserMessage(const AContent: string; const AImages: array of UInt32): Boolean;
 
     /// <summary>
     ///   Retrieves the most recent user message from the conversation history.
@@ -345,16 +470,15 @@ type
 
     /// <summary>
     ///   Executes an inference process using the currently loaded Phinx model.
-    ///   This function processes input data and generates a response based on the provided context.
+    ///   This function processes input data, generates predictions, and constructs
+    ///   a response based on the provided context.
     /// </summary>
-    /// <param name="AMaxContext">
-    ///   The maximum number of tokens to consider in the inference context.
-    ///   If not specified, the default value <c>cphDefaultMaxContext</c> is used.
-    /// </param>
     /// <returns>
     ///   <c>True</c> if inference was successfully executed; otherwise, <c>False</c>.
+    ///   A return value of <c>False</c> may indicate that no model is loaded or
+    ///   that an error occurred during processing.
     /// </returns>
-    function RunInference(const AMaxContext: UInt32 = cphDefaultMaxContext): Boolean;
+    function RunInference(): Boolean;
 
     /// <summary>
     ///   Retrieves the full response generated by the last inference process.
@@ -528,13 +652,31 @@ begin
   inherited;
 
   FMessages := TStringList.Create();
+  FImageList := TStringList.Create();
   FTokenResponse.Initialize();
   FStream := True;
+
+  FDiversityPenalty := 0.0;
+  FDoSample := False;
+  FEarlyStopping := True;
+  FLengthPenalty := 1.0;
+  MaxLength := cphDefaultMaxContext;
+  FMinLength := 0;
+  FNoRepeatNumGramSize := 0;
+  FNumBeams := 1;
+  FNumReturnSequences := 1;
+  FPastPresentShareBuffer := True;
+  FRepetitionPenalty := 1.0;
+  FTemperature := 1.0;
+  FTopK := 1;
+  FTopP := 1.0;
+
 end;
 
 destructor TPhinx.Destroy();
 begin
   UnloadModel();
+  FImageList.Free();
   FMessages.Free();
 
   inherited;
@@ -560,6 +702,26 @@ begin
   FTokenResponse.SetMaxLineLength(AValue);
 end;
 
+procedure TPhinx.ClearImages();
+begin
+  FImageList.Clear();
+
+  if Assigned(FImages) then
+  begin
+    OgaDestroyImages(FImages);
+    FImages := nil;
+  end;
+end;
+
+function TPhinx.AddImage(const AFilename: string): Boolean;
+begin
+  Result := TFile.Exists(AFilename);
+  if Result then
+  begin
+    FImageList.Add(AFilename);
+  end;
+end;
+
 procedure TPhinx.ClearMessages();
 begin
   FMessages.Clear();
@@ -576,13 +738,30 @@ begin
   Result := FSystemMessage;
 end;
 
-procedure TPhinx.AddUserMessage(const AContent: string);
+function  TPhinx.AddUserMessage(const AContent: string; const AImages: array of UInt32): Boolean;
 var
   LMessage: string;
+  LImageTokens: string;
+  I: Integer;
 begin
+  Result := False;
+
   if AContent.IsEmpty then Exit;
 
-  LMessage := Format('<|user|>%s<|end|>', [AContent]);
+  LImageTokens := '';
+  for I in AImages do
+  begin
+    (*
+    if not InRange(AImages[I], 1, FImageList.Count) then
+    begin
+      SetError('Invalid image number: %d', [AImages[I]]);
+      Exit;
+    end;
+    *)
+    LImageTokens := LImageTokens + Format('<|image_%d|>', [AImages[I-1]]);
+  end;
+
+  LMessage := Format('<|user|>%s%s<|end|>', [LImageTokens, AContent]);
   FMessages.Add(LMessage);
 
   FLastUserMessage := AContent;
@@ -621,12 +800,14 @@ begin
     // Process system message
     if not FSystemMessage.IsEmpty then
     begin
-      Result := Format('<|system|>%s', [FSystemMessage]) + Result;
+      Result := Format('<|system|>%s<|end|>', [FSystemMessage]) + Result;
     end;
 
     // Process ending message
     Result := Result + '<|assistant|>';
   end;
+
+  Result := Result.Trim();
 end;
 
 function  TPhinx.LoadModel(const AFilename: string): Boolean;
@@ -747,12 +928,43 @@ begin
   Result := TPath.Combine(string(vfolder_getVirtualBasePath(FVFolder)), 'model');
 end;
 
-function  TPhinx.RunInference(const AMaxContext: UInt32): Boolean;
+procedure TPhinx.SetMaxLength(const AValue: UInt32);
+begin
+  FMaxLength := EnsureRange(AValue, 512, 131072);
+end;
+
+procedure TPhinx.LoadImages();
+type
+  PCharArray = array of PUTF8Char;
+var
+  StrArray: PCharArray;
+  I: Integer;
+  LImagePaths: POgaStringArray;
+begin
+  if Assigned(FImages) then Exit;
+  if FImageList.Count = 0  then Exit;
+
+  SetLength(StrArray, FImageList.Count);
+  for I := 0 to FImageList.Count-1 do
+  begin
+    StrArray[I] := PUTF8Char(UTF8String(FImageList[I]));
+  end;
+
+  if not CheckResult(OgaCreateStringArrayFromStrings(@StrArray[0], Length(StrArray), @LImagePaths)) then Exit;
+  try
+    if not CheckResult(OgaLoadImages(LImagePaths, @FImages)) then Exit;
+
+  finally
+    OgaDestroyStringArray(LImagePaths);
+  end;
+end;
+
+function  TPhinx.RunInference(): Boolean;
 const
   CID = 'TPhinx.RunInference';
 var
   LPrompt: string;
-  LMaxContext: UInt32;
+
   LTokenStr: string;
   LSequenceCount: NativeUInt;
   LGeneratorParams: POgaGeneratorParams;
@@ -784,8 +996,6 @@ begin
 
   try
 
-    LMaxContext := EnsureRange(AMaxContext, 512, 131072);
-
     FInputTokens := 0;
     FOutputTokens := 0;
     FElapsedTime := 0;
@@ -796,8 +1006,12 @@ begin
     LGeneratorParams := nil;
     LSequences := nil;
     LInputTensors := nil;
+    FImages := nil;
 
-    OnStatus(CID, 'Processing images, audios, creating input tensor...', []);
+    OnStatus(CID, 'Loading images...', []);
+    LoadImages();
+
+    OnStatus(CID, 'Creating input tensor...', []);
     if not CheckResult(OgaProcessorProcessImagesAndAudios(FProcessor, phUtils.AsUtf8(LPrompt), FImages, FAudios, @LInputTensors)) then  Exit;
 
     OnStatus(CID, 'Creating sequences...', []);
@@ -813,7 +1027,22 @@ begin
     if not CheckResult(OgaCreateGeneratorParams(FModel, @LGeneratorParams)) then Exit;
 
     OnStatus(CID, 'Setting generator params...', []);
-    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'max_length',   LMaxContext)) then Exit;
+
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'diversity_penalty',   FDiversityPenalty)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchBool(LGeneratorParams, 'do_sample',   FDoSample)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchBool(LGeneratorParams, 'early_stopping',   FEarlyStopping)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'length_penalty',   FLengthPenalty)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'max_length',   FMaxLength)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'min_length',   FMinLength)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'no_repeat_ngram_size',   FNoRepeatNumGramSize)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'num_beams',   FNumBeams)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'num_return_sequences',   FNumReturnSequences)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchBool(LGeneratorParams, 'past_present_share_buffer',   FPastPresentShareBuffer)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'repetition_penalty',   FRepetitionPenalty)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'temperature',   FTemperature)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'top_k',   FTopK)) then Exit;
+    if not CheckResult(OgaGeneratorParamsSetSearchNumber(LGeneratorParams, 'top_p',   FTopP)) then Exit;
+
     if not CheckResult(OgaGeneratorParamsSetInputs(LGeneratorParams, LInputTensors)) then Exit;
 
     OnStatus(CID, 'Creating generator...', []);
@@ -825,7 +1054,7 @@ begin
     // Record start time
     LStartTime := Now;
 
-    while not OgaGenerator_IsDone(LGenerator) do
+    while (not OgaGenerator_IsDone(LGenerator)) do
     begin
       if OnCancelInference() then Break;
 
