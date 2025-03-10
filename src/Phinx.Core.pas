@@ -153,7 +153,8 @@ type
     FSystemMessage: string;
     FLastUserMessage: string;
     FImageList: TStringList;
-
+    FAudioList: TStringList;
+    FWavPlayer: TphWavPlayer;
     FDiversityPenalty: Single;
     FDoSample: Boolean;
     FEarlyStopping: Boolean;
@@ -170,17 +171,18 @@ type
     FTopP: Single;
 
 
-  function  LoadClibsDLL(): Boolean;
-  procedure UnloadCLibsDLL();
-  function  CheckResult(const AResult: POgaResult): Boolean;
-  function  GetModelBasePath(): string;
-  procedure SetMaxLength(const AValue: UInt32);
-  procedure LoadImages();
-  function  OnCancelInference(): Boolean;
-  procedure OnNextToken(const AToken: string);
-  procedure OnInferenceStart();
-  procedure OnInferenceEnd();
-  procedure OnStatus(const AID, AMsg: string; const AArgs: array of const);
+    function  LoadClibsDLL(): Boolean;
+    procedure UnloadCLibsDLL();
+    function  CheckResult(const AResult: POgaResult): Boolean;
+    function  GetModelBasePath(): string;
+    procedure SetMaxLength(const AValue: UInt32);
+    procedure LoadImages();
+    procedure LoadAudios();
+    function  OnCancelInference(): Boolean;
+    procedure OnNextToken(const AToken: string);
+    procedure OnInferenceStart();
+    procedure OnInferenceEnd();
+    procedure OnStatus(const AID, AMsg: string; const AArgs: array of const);
   public
     /// <summary>
     ///   Event triggered to determine whether an ongoing inference process should be canceled.
@@ -312,6 +314,12 @@ type
     property TopP: Single read FTopP write FTopP;
 
     /// <summary>
+    ///   Provides access to the WAV player component.
+    ///   This allows loading and playing WAV audio files for audio-based output or processing.
+    /// </summary>
+    property WavPlayer: TphWavPlayer read FWavPlayer;
+
+    /// <summary>
     ///   Initializes a new instance of the <c>TPhinx</c> class.
     ///   This constructor sets up necessary resources and prepares the instance
     ///   for operation within the Phinx framework.
@@ -381,6 +389,24 @@ type
     function AddImage(const AFilename: string): Boolean;
 
     /// <summary>
+    ///   Clears all stored audio files from memory.
+    ///   This resets the audio processing context, ensuring no residual audio files remain.
+    /// </summary>
+    procedure ClearAudios();
+
+    /// <summary>
+    ///   Adds an audio file to the processing pipeline from the specified file.
+    ///   The audio file is loaded and made available for inference processing.
+    /// </summary>
+    /// <param name="AFilename">
+    ///   The full path to the audio file that should be added.
+    /// </param>
+    /// <returns>
+    ///   <c>True</c> if the audio file was successfully loaded and added; otherwise, <c>False</c>.
+    /// </returns>
+    function AddAudio(const AFilename: string): Boolean;
+
+    /// <summary>
     ///   Clears all stored messages, including system, user, and assistant messages.
     ///   This resets the conversation history, ensuring a fresh context for new interactions.
     /// </summary>
@@ -411,7 +437,7 @@ type
     /// <param name="AContent">
     ///   The content of the user message to be added.
     /// </param>
-    function AddUserMessage(const AContent: string; const AImages: array of UInt32): Boolean;
+    function AddUserMessage(const AContent: string; const AImages: array of UInt32; const AAudios: array of UInt32): Boolean;
 
     /// <summary>
     ///   Retrieves the most recent user message from the conversation history.
@@ -653,6 +679,8 @@ begin
 
   FMessages := TStringList.Create();
   FImageList := TStringList.Create();
+  FAudioList := TStringList.Create();
+  FWavPlayer := TphWavPlayer.Create();
   FTokenResponse.Initialize();
   FStream := True;
 
@@ -676,6 +704,8 @@ end;
 destructor TPhinx.Destroy();
 begin
   UnloadModel();
+  FWavPlayer.Free();
+  FAudioList.Free();
   FImageList.Free();
   FMessages.Free();
 
@@ -722,6 +752,26 @@ begin
   end;
 end;
 
+procedure TPhinx.ClearAudios();
+begin
+  FAudioList.Clear();
+
+  if Assigned(FAudios) then
+  begin
+    OgaDestroyAudios(FAudios);
+    FAudios := nil;
+  end;
+end;
+
+function TPhinx.AddAudio(const AFilename: string): Boolean;
+begin
+  Result := TFile.Exists(AFilename);
+  if Result then
+  begin
+    FAudioList.Add(AFilename);
+  end;
+end;
+
 procedure TPhinx.ClearMessages();
 begin
   FMessages.Clear();
@@ -738,30 +788,41 @@ begin
   Result := FSystemMessage;
 end;
 
-function  TPhinx.AddUserMessage(const AContent: string; const AImages: array of UInt32): Boolean;
+function  TPhinx.AddUserMessage(const AContent: string; const AImages: array of UInt32; const AAudios: array of UInt32): Boolean;
 var
   LMessage: string;
-  LImageTokens: string;
-  I: Integer;
+  LMediaTokens: string;
+  I, LNum: Integer;
 begin
   Result := False;
 
   if AContent.IsEmpty then Exit;
 
-  LImageTokens := '';
-  for I in AImages do
+  LMediaTokens := '';
+
+  I := 1;
+  for LNum in AImages do
   begin
-    (*
-    if not InRange(AImages[I], 1, FImageList.Count) then
+    if not InRange(LNum, 1, FImageList.Count) then
     begin
-      SetError('Invalid image number: %d', [AImages[I]]);
-      Exit;
+      continue;
     end;
-    *)
-    LImageTokens := LImageTokens + Format('<|image_%d|>', [AImages[I-1]]);
+    LMediaTokens := LMediaTokens + Format('<|image_%d|>', [I]);
+    Inc(I);
   end;
 
-  LMessage := Format('<|user|>%s%s<|end|>', [LImageTokens, AContent]);
+  I := 1;
+  for LNum in AAudios do
+  begin
+    if not InRange(LNum, 1, FAudioList.Count) then
+    begin
+      continue;
+    end;
+    LMediaTokens := LMediaTokens + Format('<|audio_%d|>', [I]);
+    Inc(I);
+  end;
+
+  LMessage := Format('<|user|>%s%s<|end|>', [LMediaTokens, AContent]);
   FMessages.Add(LMessage);
 
   FLastUserMessage := AContent;
@@ -959,6 +1020,32 @@ begin
   end;
 end;
 
+procedure TPhinx.LoadAudios();
+type
+  PCharArray = array of PUTF8Char;
+var
+  StrArray: PCharArray;
+  I: Integer;
+  LAudioPaths: POgaStringArray;
+begin
+  if Assigned(FAudios) then Exit;
+  if FAudioList.Count = 0  then Exit;
+
+  SetLength(StrArray, FAudioList.Count);
+  for I := 0 to FAudioList.Count-1 do
+  begin
+    StrArray[I] := PUTF8Char(UTF8String(FAudioList[I]));
+  end;
+
+  if not CheckResult(OgaCreateStringArrayFromStrings(@StrArray[0], Length(StrArray), @LAudioPaths)) then Exit;
+  try
+    if not CheckResult(OgaLoadAudios(LAudioPaths, @FAudios)) then Exit;
+
+  finally
+    OgaDestroyStringArray(LAudioPaths);
+  end;
+end;
+
 function  TPhinx.RunInference(): Boolean;
 const
   CID = 'TPhinx.RunInference';
@@ -1010,6 +1097,7 @@ begin
 
     OnStatus(CID, 'Loading images...', []);
     LoadImages();
+    LoadAudios();
 
     OnStatus(CID, 'Creating input tensor...', []);
     if not CheckResult(OgaProcessorProcessImagesAndAudios(FProcessor, phUtils.AsUtf8(LPrompt), FImages, FAudios, @LInputTensors)) then  Exit;

@@ -25,6 +25,9 @@ interface
 uses
   WinApi.Windows,
   WinApi.Messages,
+  Winapi.ActiveX,
+  WinApi.MMSystem,
+  Winapi.DirectSound,
   System.SysUtils,
   System.IOUtils,
   System.DateUtils,
@@ -426,6 +429,88 @@ type
     destructor Destroy(); override;
     procedure SetError(const AText: string; const AArgs: array of const); virtual;
     function  GetError(): string; virtual;
+  end;
+
+  /// <summary>
+  ///   <c>TphWavPlayer</c> is a WAV file player class that provides functionality
+  ///   to load and play WAV audio files. It allows basic operations such as opening,
+  ///   playing, stopping, and adjusting the volume of the audio playback.
+  /// </summary>
+  TphWavPlayer = class(TphObject)
+  private
+    FDirectSound: IDirectSound;
+    FPrimaryBuffer: IDirectSoundBuffer;
+    FSecondaryBuffer: IDirectSoundBuffer;
+    FVolume: Single;
+    function LoadWavFile(const AFileName: string): Boolean;
+    procedure SetVolume(const AValue: Single);
+  public
+    /// <summary>
+    ///   Initializes a new instance of the <c>TphWavPlayer</c> class.
+    ///   This constructor sets up the necessary resources for audio playback.
+    /// </summary>
+    constructor Create(); override;
+
+    /// <summary>
+    ///   Destroys the instance of the <c>TphWavPlayer</c> class.
+    ///   This destructor ensures proper cleanup of allocated resources before
+    ///   the object is removed from memory.
+    /// </summary>
+    destructor Destroy; override;
+
+    /// <summary>
+    ///   Opens the WAV player, optionally attaching it to a window handle.
+    ///   This method prepares the player for loading and playing audio files.
+    /// </summary>
+    /// <param name="AHandle">
+    ///   An optional window handle that can be associated with the player.
+    ///   Defaults to <c>0</c>, meaning it will try to a handle from the current Console if there is one.
+    /// </param>
+    /// <returns>
+    ///   <c>True</c> if the player was successfully opened; otherwise, <c>False</c>.
+    /// </returns>
+    function Open(const AHandle: HWND = 0): Boolean;
+
+    /// <summary>
+    ///   Checks whether the WAV player is currently open and available for use.
+    /// </summary>
+    /// <returns>
+    ///   <c>True</c> if the player is open; otherwise, <c>False</c>.
+    /// </returns>
+    function IsOpen(): Boolean;
+
+    /// <summary>
+    ///   Closes the WAV player, releasing any associated resources.
+    ///   This should be called when playback is no longer needed.
+    /// </summary>
+    procedure Close();
+
+    /// <summary>
+    ///   Loads a WAV file from the specified file path into the player.
+    ///   The file must be a valid WAV format for successful loading.
+    /// </summary>
+    /// <param name="AFileName">
+    ///   The full path to the WAV file to be loaded.
+    /// </param>
+    procedure LoadFromFile(const AFileName: string);
+
+    /// <summary>
+    ///   Starts playback of the loaded WAV file.
+    ///   The audio will play from the beginning unless it is already playing.
+    /// </summary>
+    procedure Play;
+
+    /// <summary>
+    ///   Stops the current audio playback.
+    ///   This halts the playback of the loaded WAV file.
+    /// </summary>
+    procedure Stop;
+
+    /// <summary>
+    ///   Controls the playback volume of the WAV player.
+    ///   The volume level is represented as a floating-point value from 0 (silence) to 1 (full volume).
+    /// </summary>
+    property Volume: Single read FVolume write SetVolume;
   end;
 
 implementation
@@ -1972,6 +2057,175 @@ function  TphObject.GetError(): string;
 begin
   Result := FError;
 end;
+
+
+{ TphWavPlayer }
+procedure TphWavPlayer.SetVolume(const AValue: Single);
+var
+  LValue: Single;
+begin
+  LValue := AValue;
+  if LValue < 0 then LValue := 0
+  else if LValue > 1 then LValue := 1;
+  FVolume := LValue;
+  if Assigned(FSecondaryBuffer) then
+    FSecondaryBuffer.SetVolume(Round((1 - LValue) * -10000));
+end;
+
+constructor TphWavPlayer.Create();
+begin
+  inherited;
+end;
+
+destructor TphWavPlayer.Destroy;
+begin
+  Close();
+  inherited;
+end;
+
+function TphWavPlayer.Open(const AHandle: HWND): Boolean;
+var
+  BufferDesc: DSBUFFERDESC;
+  WFX: TWaveFormatEx;
+  LHandle: HWND;
+begin
+  Result := False;
+
+  LHandle := AHandle;
+
+  if Failed(DirectSoundCreate(nil, FDirectSound, nil)) then
+  begin
+    SetError('Failed to initialize DirectSound', []);
+    Close();
+    Exit;
+  end;
+
+  if LHandle = 0 then
+    LHandle := GetConsoleWindow(); // Use console window if no handle is provided
+
+  if Failed(FDirectSound.SetCooperativeLevel(LHandle, DSSCL_PRIORITY)) then
+  begin
+    SetError('Failed to set cooperative level', []);
+    Exit;
+  end;
+
+  FillChar(BufferDesc, SizeOf(BufferDesc), 0);
+  BufferDesc.dwSize := SizeOf(BufferDesc);
+  BufferDesc.dwFlags := DSBCAPS_PRIMARYBUFFER;
+
+  if Failed(FDirectSound.CreateSoundBuffer(BufferDesc, FPrimaryBuffer, nil)) then
+  begin
+    SetError('Failed to create primary sound buffer', []);
+    Close();
+    Exit;
+  end;
+
+  FillChar(WFX, SizeOf(WFX), 0);
+  WFX.wFormatTag := WAVE_FORMAT_PCM;
+  WFX.nChannels := 2;
+  WFX.nSamplesPerSec := 44100;
+  WFX.wBitsPerSample := 16;
+  WFX.nBlockAlign := (WFX.nChannels * WFX.wBitsPerSample) div 8;
+  WFX.nAvgBytesPerSec := WFX.nSamplesPerSec * WFX.nBlockAlign;
+
+  FPrimaryBuffer.SetFormat(@WFX);
+
+  Result := True;
+end;
+
+function TphWavPlayer.IsOpen(): Boolean;
+begin
+  Result := False;
+
+  if not Assigned(FDirectSound) then Exit;
+
+  Result := True;
+end;
+
+procedure TphWavPlayer.Close();
+begin
+  Stop();
+
+  FSecondaryBuffer := nil;
+  FPrimaryBuffer := nil;
+  FDirectSound := nil;
+end;
+
+procedure TphWavPlayer.LoadFromFile(const AFileName: string);
+begin
+  if not IsOpen() then Exit;
+
+  if not LoadWavFile(AFileName) then
+  begin
+    SetError('Failed to load WAV file', []);
+    Exit;
+  end;
+end;
+
+function TphWavPlayer.LoadWavFile(const AFileName: string): Boolean;
+var
+  BufferDesc: DSBUFFERDESC;
+  WaveFormat: TWaveFormatEx;
+  WaveData: Pointer;
+  WaveSize: DWORD;
+  DataPtr1, DataPtr2: Pointer;
+  DataSize1, DataSize2: DWORD;
+  HMMIO: THandle;
+  MMCKInfo, MMCKInfoSub: TMMCKInfo;
+begin
+  Result := False;
+
+  if not IsOpen() then Exit;
+
+  HMMIO := mmioOpen(PChar(AFileName), nil, MMIO_READ or MMIO_ALLOCBUF);
+  if HMMIO = 0 then Exit;
+
+  MMCKInfo.fccType := mmioStringToFOURCC('WAVE', 0);
+  if mmioDescend(HMMIO, @MMCKInfo, nil, MMIO_FINDRIFF) <> MMSYSERR_NOERROR then Exit;
+
+  MMCKInfoSub.ckid := mmioStringToFOURCC('fmt ', 0);
+  if mmioDescend(HMMIO, @MMCKInfoSub, @MMCKInfo, MMIO_FINDCHUNK) <> MMSYSERR_NOERROR then Exit;
+
+  if mmioRead(HMMIO, @WaveFormat, SizeOf(WaveFormat)) <> SizeOf(WaveFormat) then Exit;
+  mmioAscend(HMMIO, @MMCKInfoSub, 0);
+
+  MMCKInfoSub.ckid := mmioStringToFOURCC('data', 0);
+  if mmioDescend(HMMIO, @MMCKInfoSub, @MMCKInfo, MMIO_FINDCHUNK) <> MMSYSERR_NOERROR then Exit;
+
+  WaveSize := MMCKInfoSub.cksize;
+  GetMem(WaveData, WaveSize);
+  if mmioRead(HMMIO, WaveData, WaveSize) <> Integer(WaveSize) then Exit;
+  mmioClose(HMMIO, 0);
+
+  FillChar(BufferDesc, SizeOf(BufferDesc), 0);
+  BufferDesc.dwSize := SizeOf(BufferDesc);
+  BufferDesc.dwFlags := DSBCAPS_STATIC or DSBCAPS_CTRLVOLUME;
+  BufferDesc.dwBufferBytes := WaveSize;
+  BufferDesc.lpwfxFormat := @WaveFormat;
+
+  if Failed(FDirectSound.CreateSoundBuffer(BufferDesc, FSecondaryBuffer, nil)) then Exit;
+  if Failed(FSecondaryBuffer.Lock(0, WaveSize, @DataPtr1, @DataSize1, @DataPtr2, @DataSize2, 0)) then Exit;
+  Move(WaveData^, DataPtr1^, DataSize1);
+  if DataPtr2 <> nil then Move((PByte(WaveData) + DataSize1)^, DataPtr2^, DataSize2);
+  FSecondaryBuffer.Unlock(DataPtr1, DataSize1, DataPtr2, DataSize2);
+
+  FreeMem(WaveData);
+  Result := True;
+end;
+
+procedure TphWavPlayer.Play();
+begin
+  if Assigned(FSecondaryBuffer) then
+    FSecondaryBuffer.Play(0, 0, 0);
+end;
+
+procedure TphWavPlayer.Stop();
+begin
+  if Assigned(FSecondaryBuffer) then
+    FSecondaryBuffer.Stop;
+end;
+
+{ =========================================================================== }
 
 initialization
 begin

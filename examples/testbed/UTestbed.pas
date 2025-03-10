@@ -43,6 +43,7 @@ unit UTestbed;
 interface
 
 uses
+  WinApi.Windows,
   System.SysUtils,
   Phinx.Utils,
   Phinx.Core;
@@ -95,6 +96,9 @@ begin
   else
       // If model building fails, print a failure message in red color
       phConsole.PrintLn(phCSIFGRed+phCRLF+'Failed!');
+
+  // Pause the console to wait for user input before closing
+  phConsole.Pause();
 end;
 
 { -----------------------------------------------------------------------------
@@ -168,7 +172,7 @@ begin
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
 
     // Add a user query for general knowledge retrieval
-    LPhinx.AddUserMessage('Who is Bill Gates? (detailed)', []);
+    LPhinx.AddUserMessage('Who is Bill Gates? (detailed)', [], []);
 
     // Enable or disable streaming of inference responses
     LPhinx.Stream := CStream;
@@ -195,11 +199,15 @@ begin
     else
     begin
       // If inference fails, display an error message in red
+      phConsole.ClearLine();
       phConsole.PrintLn(phCSIFGRed+'Error: %s', [LPhinx.GetError()]);
     end;
 
     // Unload the model after inference to free resources
     LPhinx.UnloadModel();
+
+    // Pause the console to wait for user input before closing
+    phConsole.Pause();
   finally
     // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
@@ -278,7 +286,7 @@ begin
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
 
     // Add a user query involving financial reasoning
-    LPhinx.AddUserMessage('I have $20,000 in my savings account, where I receive a 4% profit per year and payments twice a year. Can you please tell me how long it will take for me to become a millionaire? Think step by step carefully.', []);
+    LPhinx.AddUserMessage('I have $20,000 in my savings account, where I receive a 4% profit per year and payments twice a year. Can you please tell me how long it will take for me to become a millionaire? Think step by step carefully.', [], []);
 
     // Enable or disable streaming of inference responses
     LPhinx.Stream := CStream;
@@ -305,11 +313,15 @@ begin
     else
     begin
       // If inference fails, display an error message in red
+      phConsole.ClearLine();
       phConsole.PrintLn(phCSIFGRed+'Error: %s', [LPhinx.GetError()]);
     end;
 
     // Unload the model after inference to free resources
     LPhinx.UnloadModel();
+
+    // Pause the console to wait for user input before closing
+    phConsole.Pause();
   finally
     // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
@@ -391,7 +403,7 @@ begin
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
 
     // Add a user query requesting a detailed image description
-    LPhinx.AddUserMessage('Describe the image in detail.', [1]);
+    LPhinx.AddUserMessage('Describe the image in detail.', [1], []);
 
     // Enable or disable streaming of inference responses
     LPhinx.Stream := CStream;
@@ -418,11 +430,15 @@ begin
     else
     begin
       // If inference fails, display an error message in red
+      phConsole.ClearLine();
       phConsole.PrintLn(phCSIFGRed+'Error: %s', [LPhinx.GetError()]);
     end;
 
     // Unload the model after inference to free resources
     LPhinx.UnloadModel();
+
+    // Pause the console to wait for user input before closing
+    phConsole.Pause();
   finally
     // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
@@ -504,7 +520,7 @@ begin
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
 
     // Add a user query related to code generation from an image
-    LPhinx.AddUserMessage('Can you generate HTML + JS code about this image?', [1]);
+    LPhinx.AddUserMessage('Can you generate HTML + JS code about this image?', [1], []);
 
     // Enable or disable streaming of inference responses
     LPhinx.Stream := CStream;
@@ -536,12 +552,254 @@ begin
 
     // Unload the model after inference to free resources
     LPhinx.UnloadModel();
+
+    // Pause the console to wait for user input before closing
+    phConsole.Pause();
   finally
     // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
   end;
 end;
 
+procedure Test05();
+const
+  CAudioFilename = 'res/audios/digthis.wav'; // Audio WAV filename
+var
+  LPhinx: TPhinx; // Instance of TPhinx for model inference
+  LInputTokens: UInt32; // Stores the number of input tokens processed
+  LOutputTokens: UInt32; // Stores the number of output tokens generated
+  LSpeed: Double; // Stores the inference speed in tokens per second
+  LTime: Double; // Stores the total inference time in seconds
+begin
+  // Set the console title
+  phConsole.SetTitle('Phinx: Audio Transcribe');
+
+  // Display an instruction message
+  phConsole.PrintLn(phCSIFGBrightYellow+'Press ESC to cancel inference.'+phCRLF);
+
+  // Create an instance of TPhinx for model inference
+  LPhinx := TPhinx.Create();
+  try
+    // Set the maximum inference context length
+    LPhinx.MaxLength := CMaxContext;
+
+    // Set up a status event handler to display status messages
+    LPhinx.StatusEvent :=
+      procedure(const AID, AStatus: string)
+      begin
+        // Handle inference start and end status messages
+        if (AID = 'TPhinx.RunInference') and (AStatus = 'InferenceStart') then
+          phConsole.ClearLine()
+        else
+        if (AID = 'TPhinx.RunInference') and (AStatus = 'InferenceEnd') then
+          phConsole.PrintLn()
+        else
+        if (AID = 'TPhinx.RunInference') and (AStatus = CphStatusEnd) then
+            phConsole.ClearLine()
+        else
+        begin
+          phConsole.ClearLine();
+          phConsole.Print(phCR+phCSIFGYellow+AStatus);
+        end;
+      end;
+
+    // Event triggered at the start of inference
+    LPhinx.InferenceStartEvent :=
+      procedure()
+      begin
+        // Play the loaded WAV file
+        LPhinx.WavPlayer.Play();
+
+        phConsole.PrintLn('Question:');
+        phConsole.PrintLn(phCSIFGCyan+phConsole.WrapTextEx(LPhinx.GetLastUserMessage(), 120-10));
+        phConsole.PrintLn();
+        phConsole.PrintLn('Response:');
+      end;
+
+    // Event triggered when the model generates a new token
+    LPhinx.NextTokenEvent :=
+      procedure(const AToken: string)
+      begin
+        phConsole.Print(phCSIFGGreen+AToken);
+      end;
+
+    // Load the model; exit if loading fails
+    if not LPhinx.LoadModel() then Exit;
+
+    // Add audio file for inference
+    LPhinx.AddAudio(CAudioFilename);
+
+    // Open wavplayer, using the console handle
+    LPhinx.WavPlayer.Open();
+
+    // Load audio file for playback
+    LPhinx.WavPlayer.LoadFromFile(CAudioFilename);
+
+    // Set a system message to define the AI assistant's persona
+    LPhinx.SetSystemMessage('You are a helpful AI assistant.');
+
+    // Add a user query requesting transcribe/translates
+    LPhinx.AddUserMessage('Transcribe the audio to text.', [], [1]);
+
+    // Enable or disable streaming of inference responses
+    LPhinx.Stream := CStream;
+
+    // Run the model inference
+    if LPhinx.RunInference() then
+    begin
+      // If streaming is disabled, print the full response
+      if not LPhinx.Stream then
+      begin
+        phConsole.PrintLn(LPhinx.GetInferenceResponse());
+      end;
+
+      // Retrieve performance metrics for the inference
+      LPhinx.GetPerformance(@LInputTokens, @LOutputTokens, @LSpeed, @LTime);
+
+      // Display inference performance metrics in the console
+      phConsole.PrintLn(phCRLF+'Performance:');
+      phConsole.PrintLn(phCSIFGBrightYellow+'Input Tokens : %d', [LInputTokens]); // Input tokens count
+      phConsole.PrintLn(phCSIFGBrightYellow+'Output Tokens: %d', [LOutputTokens]); // Output tokens count
+      phConsole.PrintLn(phCSIFGBrightYellow+'Speed        : %.2f tokens/sec', [LSpeed]); // Processing speed
+      phConsole.PrintLn(phCSIFGBrightYellow+'Time         : %.2f seconds', [LTime]); // Execution time
+    end
+    else
+    begin
+      // If inference fails, display an error message in red
+      phConsole.ClearLine();
+      phConsole.PrintLn(phCSIFGRed+'Error: %s', [LPhinx.GetError()]);
+    end;
+
+    // Unload the model after inference to free resources
+    LPhinx.UnloadModel();
+
+    // Pause the console to wait for user input before closing
+    phConsole.Pause();
+  finally
+       // Free the TPhinx instance to prevent memory leaks
+    LPhinx.Free();
+  end;
+end;
+
+procedure Test06();
+const
+  CAudioFilename = 'res/audios/1272-141231-0002.wav'; // Audio WAV filename
+var
+  LPhinx: TPhinx; // Instance of TPhinx for model inference
+  LInputTokens: UInt32; // Stores the number of input tokens processed
+  LOutputTokens: UInt32; // Stores the number of output tokens generated
+  LSpeed: Double; // Stores the inference speed in tokens per second
+  LTime: Double; // Stores the total inference time in seconds
+begin
+  // Set the console title
+  phConsole.SetTitle('Phinx: Audio Transcribe/lation');
+
+  // Display an instruction message
+  phConsole.PrintLn(phCSIFGBrightYellow+'Press ESC to cancel inference.'+phCRLF);
+
+  // Create an instance of TPhinx for model inference
+  LPhinx := TPhinx.Create();
+  try
+    // Set the maximum inference context length
+    LPhinx.MaxLength := CMaxContext;
+
+    // Set up a status event handler to display status messages
+    LPhinx.StatusEvent :=
+      procedure(const AID, AStatus: string)
+      begin
+        // Handle inference start and end status messages
+        if (AID = 'TPhinx.RunInference') and (AStatus = 'InferenceStart') then
+          phConsole.ClearLine()
+        else
+        if (AID = 'TPhinx.RunInference') and (AStatus = 'InferenceEnd') then
+          phConsole.PrintLn()
+        else
+        if (AID = 'TPhinx.RunInference') and (AStatus = CphStatusEnd) then
+            phConsole.ClearLine()
+        else
+        begin
+          phConsole.ClearLine();
+          phConsole.Print(phCR+phCSIFGYellow+AStatus);
+        end;
+      end;
+
+    // Event triggered at the start of inference
+    LPhinx.InferenceStartEvent :=
+      procedure()
+      begin
+        // Play the loaded WAV file
+        LPhinx.WavPlayer.Play();
+
+        phConsole.PrintLn('Question:');
+        phConsole.PrintLn(phCSIFGCyan+phConsole.WrapTextEx(LPhinx.GetLastUserMessage(), 120-10));
+        phConsole.PrintLn();
+        phConsole.PrintLn('Response:');
+      end;
+
+    // Event triggered when the model generates a new token
+    LPhinx.NextTokenEvent :=
+      procedure(const AToken: string)
+      begin
+        phConsole.Print(phCSIFGGreen+AToken);
+      end;
+
+    // Load the model; exit if loading fails
+    if not LPhinx.LoadModel() then Exit;
+
+    // Add audio file for inference
+    LPhinx.AddAudio(CAudioFilename);
+
+    // Open wavplayer, using the console handle
+    LPhinx.WavPlayer.Open();
+
+    // Load audio file for playback
+    LPhinx.WavPlayer.LoadFromFile(CAudioFilename);
+
+    // Set a system message to define the AI assistant's persona
+    LPhinx.SetSystemMessage('You are a helpful AI assistant.');
+
+    // Add a user query requesting transcribe/translates
+    LPhinx.AddUserMessage('Transcribe the audio to text, and then translate the audio to German.', [], [1]);
+
+    // Enable or disable streaming of inference responses
+    LPhinx.Stream := CStream;
+
+    // Run the model inference
+    if LPhinx.RunInference() then
+    begin
+      // If streaming is disabled, print the full response
+      if not LPhinx.Stream then
+      begin
+        phConsole.PrintLn(LPhinx.GetInferenceResponse());
+      end;
+
+      // Retrieve performance metrics for the inference
+      LPhinx.GetPerformance(@LInputTokens, @LOutputTokens, @LSpeed, @LTime);
+
+      // Display inference performance metrics in the console
+      phConsole.PrintLn(phCRLF+'Performance:');
+      phConsole.PrintLn(phCSIFGBrightYellow+'Input Tokens : %d', [LInputTokens]); // Input tokens count
+      phConsole.PrintLn(phCSIFGBrightYellow+'Output Tokens: %d', [LOutputTokens]); // Output tokens count
+      phConsole.PrintLn(phCSIFGBrightYellow+'Speed        : %.2f tokens/sec', [LSpeed]); // Processing speed
+      phConsole.PrintLn(phCSIFGBrightYellow+'Time         : %.2f seconds', [LTime]); // Execution time
+    end
+    else
+    begin
+      // If inference fails, display an error message in red
+      phConsole.ClearLine();
+      phConsole.PrintLn(phCSIFGRed+'Error: %s', [LPhinx.GetError()]);
+    end;
+
+    // Unload the model after inference to free resources
+    LPhinx.UnloadModel();
+
+    // Pause the console to wait for user input before closing
+    phConsole.Pause();
+  finally
+       // Free the TPhinx instance to prevent memory leaks
+    LPhinx.Free();
+  end;
+end;
 
 { -----------------------------------------------------------------------------
  RunTests: Execute Phinx Test Cases
@@ -566,10 +824,9 @@ begin
     02: Test02(); // Run Test02 (Reasoning Inference)
     03: Test03(); // Run Test03 (Vision Inference)
     04: Test04(); // Run Test04 (Vision & Code Generation Inference)
+    05: Test05(); // Run Test05 (Audio Transcribe)
+    06: Test06(); // Run Test05 (Audio Transcribe/Translation)
   end;
-
-  // Pause the console to wait for user input before closing
-  phConsole.Pause();
 end;
 
 end.
