@@ -67,7 +67,27 @@ const
   /// </summary>
   CphStatusEnd = 'End';
 
+  /// <summary>
+  ///   API key used for web search functionality.
+  ///   This key is required to authenticate requests when using the Tavily web search service.
+  ///   Ensure that the key is valid and has sufficient quota for search operations.
+  /// </summary>
+  CphWebSearchAPIKey = 'TAVILY_API_KEY';
+
+  /// <summary>
+  ///   API key used for text-to-speech (TTS) functionality.
+  ///   This key is required to authenticate requests when using the LemonFox TTS service.
+  ///   Ensure that the key is valid and has sufficient quota for audio generation.
+  /// </summary>
+  CphTextToSpeechApiKey = 'LEMONFOX_API_KEY';
+
 type
+  TphLanguages = (phUS, phUS_GB);
+
+  TphTTSVoices = (phHeart, phBella, phMichael, phAlloy, phAoede, phKore,
+    phJessica, phNicole, phNova, phRiver, phSarah, phSky, phEcho, phEric,
+    phFenrir, phLiam, phOnyx, phPuck, phAdam, phSanta);
+
   /// <summary>
   ///   Defines a generic event type with no parameters.
   ///   Used for signaling state changes, notifications, or simple event triggers.
@@ -532,6 +552,10 @@ type
     ///   A pointer to a variable that will receive the total inference time in seconds.
     /// </param>
     procedure GetPerformance(AInputTokens, AOutputTokens: PUInt32; ASpeed, ATime: PDouble);
+
+    class function WebSearch(const AQuery: string): string;
+
+    class function TextToSpeech(const AInputText: string; const AOutputFile: string='speech.wav'; const AVoice: TphTTSVoices=phBella; const ALanguage: TphLanguages=phUS): Boolean;
 
     /// <summary>
     ///   Constructs a <c>phinx.model</c> file from a specified folder containing
@@ -1275,6 +1299,42 @@ begin
 
   if Assigned(ATime) then
     ATime^ := FElapsedTime;
+end;
+
+class function TPhinx.WebSearch(const AQuery: string): string;
+begin
+  // Return web search result
+  Result := phUtils.TavilyWebSearch(phUtils.GetEnvVarValue(CphWebSearchAPIKey), AQuery);
+end;
+
+class function TPhinx.TextToSpeech(const AInputText: string; const AOutputFile: string; const AVoice: TphTTSVoices; const ALanguage: TphLanguages): Boolean;
+var
+  LLang: string;
+  LVoice: string;
+
+  function GetVoiceName(Voice: TphTTSVoices): string;
+  const
+    VoiceNames: array[TphTTSVoices] of string = (
+      'heart', 'bella', 'michael', 'alloy', 'aoede', 'kore',
+      'jessica', 'nicole', 'nova', 'river', 'sarah', 'sky', 'echo', 'eric',
+      'fenrir', 'liam', 'onyx', 'puck', 'adam', 'santa'
+    );
+  begin
+    Result := VoiceNames[Voice];
+  end;
+
+begin
+  // Get language name
+  case ALanguage of
+    phUS   : LLang := 'us';
+    phUS_GB: LLang := 'us-gb';
+  end;
+
+  // Get voice name
+  LVoice := GetVoiceName(AVoice);
+
+  // Convert text to speech
+  Result := phUtils.LemonfoxTTS(phUtils.GetEnvVarValue(CphTextToSpeechApiKey), AInputText, AOutputFile, LVoice, LLang, 'wav', 1.0, False);
 end;
 
 procedure TPhinx_BuildModelCallback(const AFilename: PWideChar; const APercentage: Integer; const ANewFile: Boolean; const AUserData: Pointer); cdecl;

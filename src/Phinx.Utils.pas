@@ -28,6 +28,7 @@ uses
   Winapi.ActiveX,
   WinApi.MMSystem,
   Winapi.DirectSound,
+  System.Generics.Collections,
   System.SysUtils,
   System.IOUtils,
   System.DateUtils,
@@ -39,7 +40,9 @@ uses
   System.Rtti,
   System.Net.HttpClient,
   System.Net.URLClient,
-  System.NetConsts;
+  System.NetEncoding,
+  System.NetConsts,
+  System.Threading;
 
 type
   { PphGenericPointer }
@@ -144,6 +147,7 @@ type
   private
     class constructor Create();
     class destructor Destroy();
+
   public
     class procedure UnitInit();
     class function  AsUTF8(const AText: string): Pointer; static;
@@ -176,6 +180,8 @@ type
     class function  FormatNumberWithCommas(const AValue: Int64): string;
     class function  GetRandomThinkingResult(): string;
     class function  TavilyWebSearch(const AAPIKey, AQuery: string): string; static;
+    class function  LemonfoxTTS(const AAPIKey: string; const AInputText: string; const AOutputFile: string='speech.wav'; const AVoice: string='bella'; const ALanguage: string='en'; const AFormat: string='wav'; const ASpeed: Single=1.0; const AWordTimestamps: Boolean=False): Boolean; static;
+
   end;
 
 const
@@ -1466,7 +1472,7 @@ begin
       JsonRequest.AddPair('include_images', TJSONBool.Create(False));
       JsonRequest.AddPair('include_image_descriptions', TJSONBool.Create(False));
       JsonRequest.AddPair('include_raw_content', TJSONBool.Create(False));
-      JsonRequest.AddPair('max_results', TJSONNumber.Create(1));
+      JsonRequest.AddPair('max_results', TJSONNumber.Create(5));
       JsonRequest.AddPair('include_domains', TJSONArray.Create); // Empty array
       JsonRequest.AddPair('exclude_domains', TJSONArray.Create); // Empty array
 
@@ -1512,6 +1518,93 @@ begin
     HttpClient.Free;
   end;
 end;
+
+
+class function phUtils.LemonfoxTTS(const AAPIKey: string; const AInputText: string; const AOutputFile: string; const AVoice: string; const ALanguage: string; const AFormat: string; const ASpeed: Single; const AWordTimestamps: Boolean): Boolean;
+var
+  HTTPClient: THTTPClient;
+  StringContent: TStringStream;
+  Response: IHTTPResponse;
+  JSONBody: TJSONObject;
+  FileStream: TFileStream;
+  ResponseStream: TMemoryStream;
+  JSONResponse: TJSONObject;
+  Base64Audio: string;
+begin
+  Result := False;
+
+  HTTPClient := THTTPClient.Create;
+  try
+    HTTPClient.CustomHeaders['Authorization'] := 'Bearer ' + AAPIKey;
+    HTTPClient.CustomHeaders['Content-Type'] := 'application/json';
+
+    JSONBody := TJSONObject.Create;
+    try
+      JSONBody.AddPair('voice', AVoice);
+      JSONBody.AddPair('language', ALanguage);
+      JSONBody.AddPair('response_format', AFormat);
+      JSONBody.AddPair('speed', TJSONNumber.Create(ASpeed));
+      JSONBody.AddPair('word_timestamps', TJSONBool.Create(AWordTimestamps));
+      JSONBody.AddPair('input', AInputText);
+
+      StringContent := TStringStream.Create(JSONBody.ToString, TEncoding.UTF8);
+      try
+        Response := HTTPClient.Post('https://api.lemonfox.ai/v1/audio/speech', StringContent);
+
+        if Response.StatusCode = 200 then
+        begin
+          if TFile.Exists(AOutputFile) then
+          begin
+            TFile.Delete(AOutputFile);
+          end;
+
+          if AWordTimestamps then
+          begin
+            JSONResponse := TJSONObject.ParseJSONValue(Response.ContentAsString(TEncoding.UTF8)) as TJSONObject;
+            try
+              if Assigned(JSONResponse) and JSONResponse.TryGetValue<string>('audio_base64', Base64Audio) then
+              begin
+                // Decode Base64 audio and save to file
+                FileStream := TFileStream.Create(AOutputFile, fmCreate);
+                try
+                  FileStream.WriteBuffer(TNetEncoding.Base64.DecodeStringToBytes(Base64Audio)[0],
+                    Length(TNetEncoding.Base64.DecodeStringToBytes(Base64Audio)));
+                  Result := TFile.Exists(AOutputFile);
+                finally
+                  FileStream.Free;
+                end;
+              end;
+            finally
+              JSONResponse.Free;
+            end;
+          end
+          else
+          begin
+            // Save the binary content directly to file
+            ResponseStream := TMemoryStream.Create;
+            try
+              Response.ContentStream.Position := 0;
+              ResponseStream.CopyFrom(Response.ContentStream, Response.ContentStream.Size);
+              ResponseStream.SaveToFile(AOutputFile);
+              Result := TFile.Exists(AOutputFile);
+            finally
+              ResponseStream.Free;
+            end;
+          end;
+        end
+        else
+          raise Exception.CreateFmt('Error: %d - %s', [Response.StatusCode, Response.StatusText]);
+      finally
+        StringContent.Free;
+      end;
+    finally
+      JSONBody.Free;
+    end;
+  finally
+    HTTPClient.Free;
+  end;
+end;
+
 
 { phConsole }
 class constructor phConsole.Create();
@@ -2036,6 +2129,7 @@ begin
     end;
   end;
 end;
+
 
 { TphObject }
 constructor TphObject.Create();

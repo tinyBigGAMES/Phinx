@@ -27,16 +27,28 @@
    - Ensure at least 7GB of free disk space for the model.
 
   Download Model:
-  - https://huggingface.co/tinybiggames/Phinx/resolve/main/Phinx.model?download=true
+   - https://huggingface.co/tinybiggames/Phinx/resolve/main/Phinx.model?download=true
 
   Setup Instructions:
-  - Place the downloaded model in your preferred directory. The examples
-    assume:
-    - Path: C:/LLM/PHINX/repo
+   - Place the downloaded model in your preferred directory. The examples
+     assume:
+     - Path: C:/LLM/PHINX/repo
+
+   - Get search api key from:
+     - https://tavily.com/
+     - You get 1000 free tokens per month
+     - Create a an environment variable named "TAVILY_API_KEY" and set it to
+       the search api key.
+
+   - Get text-to-speech key from:
+      - https://www.lemonfox.ai/apis/text-to-speech/
+      - 1 month free trial
+      - Create a an environment variable named "LEMONFOX_API_KEY" and set it to
+        the tts api key.
 
   Additional Information:
-  - Developed with: Delphi 12.2
-  - Tested on: Windows 11 (24H2)
+   - Developed with: Delphi 12.2
+   - Tested on: Windows 11 (24H2)
 }
 unit UTestbed;
 
@@ -98,7 +110,7 @@ begin
       phConsole.PrintLn(phCSIFGRed+phCRLF+'Failed!');
 
   // Pause the console to wait for user input before closing
-  phConsole.Pause();
+  phConsole.Pause(True);
 end;
 
 { -----------------------------------------------------------------------------
@@ -207,7 +219,7 @@ begin
     LPhinx.UnloadModel();
 
     // Pause the console to wait for user input before closing
-    phConsole.Pause();
+    phConsole.Pause(True);
   finally
     // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
@@ -397,7 +409,8 @@ begin
     if not LPhinx.LoadModel() then Exit;
 
     // Provide an image input for model inference
-    LPhinx.AddImage('res/images/landscape.jpg');
+    LPhinx.AddImage('res/images/landscape01.jpg');
+    //LPhinx.AddImage('res/images/landscape02.jpg');
 
     // Set a system message to define the AI assistant's persona
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
@@ -561,6 +574,12 @@ begin
   end;
 end;
 
+{ -----------------------------------------------------------------------------
+ Test05: Audio Transcription
+ This procedure utilizes the Phinx AI model to transcribe spoken words from an
+ audio file. It loads an audio file, performs speech-to-text inference, and
+ retrieves performance metrics.
+------------------------------------------------------------------------------ }
 procedure Test05();
 const
   CAudioFilename = 'res/audios/digthis.wav'; // Audio WAV filename
@@ -638,7 +657,7 @@ begin
     // Set a system message to define the AI assistant's persona
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
 
-    // Add a user query requesting transcribe/translates
+    // Add a user query requesting audio transcription
     LPhinx.AddUserMessage('Transcribe the audio to text.', [], [1]);
 
     // Enable or disable streaming of inference responses
@@ -674,13 +693,21 @@ begin
     LPhinx.UnloadModel();
 
     // Pause the console to wait for user input before closing
-    phConsole.Pause();
+    phConsole.Pause(True);
   finally
-       // Free the TPhinx instance to prevent memory leaks
+    // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
   end;
 end;
 
+
+{ -----------------------------------------------------------------------------
+ Test06: Audio Transcription and Translation
+ This procedure utilizes the Phinx AI model to transcribe spoken words from an
+ audio file and translate the text into German. It loads an audio file,
+ performs speech-to-text inference, translates the output, and retrieves
+ performance metrics.
+------------------------------------------------------------------------------ }
 procedure Test06();
 const
   CAudioFilename = 'res/audios/1272-141231-0002.wav'; // Audio WAV filename
@@ -758,7 +785,7 @@ begin
     // Set a system message to define the AI assistant's persona
     LPhinx.SetSystemMessage('You are a helpful AI assistant.');
 
-    // Add a user query requesting transcribe/translates
+    // Add a user query requesting audio transcription and translation
     LPhinx.AddUserMessage('Transcribe the audio to text, and then translate the audio to German.', [], [1]);
 
     // Enable or disable streaming of inference responses
@@ -794,12 +821,100 @@ begin
     LPhinx.UnloadModel();
 
     // Pause the console to wait for user input before closing
-    phConsole.Pause();
+    phConsole.Pause(True);
   finally
-       // Free the TPhinx instance to prevent memory leaks
+    // Free the TPhinx instance to prevent memory leaks
     LPhinx.Free();
   end;
 end;
+
+{ -----------------------------------------------------------------------------
+ Test07: Real-Time Web Search
+ This procedure utilizes Phinx to perform a web search query. It retrieves
+ real-time information from the web, processes the query, and displays the
+ response in the console.
+------------------------------------------------------------------------------ }
+procedure Test07();
+var
+  LQuestion: string; // Stores the user's search query
+  LResponse: string; // Stores the retrieved web search response
+begin
+  // Set the console title
+  phConsole.SetTitle('Phinx: WebSearch');
+
+  // Define the search query
+  LQuestion := 'What is Bill Gates current net worth as of 2025?';
+
+  // Display the question
+  phConsole.PrintLn('Question:');
+  phConsole.PrintLn(phCSIFGCyan+LQuestion+phCRLF);
+
+  // Perform web search using Phinx
+  phConsole.PrintLn('Response:');
+  LResponse := TPhinx.WebSearch(LQuestion);
+
+  // Display the response with formatted text wrapping
+  phConsole.PrintLn(phCSIFGGreen+phConsole.WrapTextEx(LResponse, 120-10));
+
+  // Pause the console to allow user review before exiting
+  phConsole.Pause();
+end;
+
+{ -----------------------------------------------------------------------------
+ Test08: Text-to-Speech (TTS)
+ This procedure utilizes Phinx to convert text into speech. It processes a
+ predefined text input, generates an audio file, and plays the output using an
+ internal WAV player.
+------------------------------------------------------------------------------ }
+const
+  CSpeechFilename = 'speech.wav'; // Filename for the generated speech output
+
+procedure Test08();
+var
+  LPhinx: TPhinx; // Instance of TPhinx for text-to-speech conversion
+  LQuestion: string; // Stores the text input to be converted to speech
+begin
+  // Set the console title
+  phConsole.SetTitle('Phinx: Text To Speech');
+
+  // Create an instance of TPhinx
+  LPhinx := TPhinx.Create();
+  try
+    // Define the text input to be converted to speech
+    LQuestion := 'Phinx is an advanced AI inference library designed to leverage ONNX Runtime GenAI and the Phi-4 Multimodal ONNX model for fast, efficient, and scalable AI applications. Built for developers seeking seamless integration of generative and multimodal AI into their projects, Phinx provides an optimized and flexible runtime environment with robust performance.';
+
+    // Display the input text
+    phConsole.PrintLn('Text:');
+    phConsole.PrintLn(phCSIFGCyan+phConsole.WrapTextEx(LQuestion, 120-10)+phCRLF);
+
+    // Display the output file name
+    phConsole.PrintLn('Output:');
+    phConsole.PrintLn(phCSIFGGreen+CSpeechFilename);
+
+    // Perform text-to-speech conversion
+    if LPhinx.TextToSpeech(LQuestion, CSpeechFilename, phBella, phUS) then
+    begin
+      // If conversion is successful, play the generated speech file
+      if LPhinx.WavPlayer.Open() then
+      begin
+        LPhinx.WavPlayer.LoadFromFile(CSpeechFilename);
+        LPhinx.WavPlayer.Play();
+        phConsole.Pause(True);
+        LPhinx.WavPlayer.Close();
+      end;
+    end
+    else
+    begin
+      // If conversion fails, display an error message
+      phConsole.PrintLn('Failed to convert text to speech.');
+      phConsole.Pause(True);
+    end;
+  finally
+    // Free the TPhinx instance to release resources
+    LPhinx.Free();
+  end;
+end;
+
 
 { -----------------------------------------------------------------------------
  RunTests: Execute Phinx Test Cases
@@ -825,7 +940,9 @@ begin
     03: Test03(); // Run Test03 (Vision Inference)
     04: Test04(); // Run Test04 (Vision & Code Generation Inference)
     05: Test05(); // Run Test05 (Audio Transcribe)
-    06: Test06(); // Run Test05 (Audio Transcribe/Translation)
+    06: Test06(); // Run Test06 (Audio Transcribe/Translation)
+    07: Test07(); // Run Test07 (Web Search)
+    08: Test08(); // Run Test08 (Text-to-Speech)
   end;
 end;
 
