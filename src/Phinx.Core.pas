@@ -81,12 +81,59 @@ const
   /// </summary>
   CphTextToSpeechApiKey = 'LEMONFOX_API_KEY';
 
-type
-  TphLanguages = (phUS, phUS_GB);
+  /// <summary>
+  ///   API key used for accessing Jina.ai services.
+  ///   Jina.ai provides various AI-powered services, including embeddings, search,
+  ///   and other machine learning capabilities. This key is required for authentication
+  ///   when making requests to Jina.ai's APIs.
+  ///   Ensure that the key is valid and has sufficient quota for the intended services.
+  /// </summary>
+  cphJinaApiKey = 'JINA_API_KEY';
 
-  TphTTSVoices = (phHeart, phBella, phMichael, phAlloy, phAoede, phKore,
-    phJessica, phNicole, phNova, phRiver, phSarah, phSky, phEcho, phEric,
-    phFenrir, phLiam, phOnyx, phPuck, phAdam, phSanta);
+type
+  /// <summary>
+  ///   Defines supported language options for text processing and speech synthesis.
+  ///   These values represent different English language variants.
+  /// </summary>
+  TphLanguages = (phUS,    /// <summary> American English (US) </summary>
+                  phUS_GB  /// <summary> British English (GB) </summary>
+                 );
+
+  /// <summary>
+  ///   Enumerates the available text-to-speech (TTS) voices.
+  ///   These voices can be used for generating speech from text input.
+  /// </summary>
+  TphTTSVoices = (
+    phHeart,    /// <summary> Heart voice model </summary>
+    phBella,    /// <summary> Bella voice model </summary>
+    phMichael,  /// <summary> Michael voice model </summary>
+    phAlloy,    /// <summary> Alloy voice model </summary>
+    phAoede,    /// <summary> Aoede voice model </summary>
+    phKore,     /// <summary> Kore voice model </summary>
+    phJessica,  /// <summary> Jessica voice model </summary>
+    phNicole,   /// <summary> Nicole voice model </summary>
+    phNova,     /// <summary> Nova voice model </summary>
+    phRiver,    /// <summary> River voice model </summary>
+    phSarah,    /// <summary> Sarah voice model </summary>
+    phSky,      /// <summary> Sky voice model </summary>
+    phEcho,     /// <summary> Echo voice model </summary>
+    phEric,     /// <summary> Eric voice model </summary>
+    phFenrir,   /// <summary> Fenrir voice model </summary>
+    phLiam,     /// <summary> Liam voice model </summary>
+    phOnyx,     /// <summary> Onyx voice model </summary>
+    phPuck,     /// <summary> Puck voice model </summary>
+    phAdam,     /// <summary> Adam voice model </summary>
+    phSanta     /// <summary> Santa voice model </summary>
+  );
+
+  /// <summary>
+  ///   Specifies roles for embedding operations.
+  ///   These roles define the purpose of the embeddings within a search or retrieval system.
+  /// </summary>
+  TphEmbedRole = (
+    phDocument, /// <summary> Represents an embedding for a document or stored content. </summary>
+    phQuery     /// <summary> Represents an embedding for a search query. </summary>
+  );
 
   /// <summary>
   ///   Defines a generic event type with no parameters.
@@ -189,7 +236,6 @@ type
     FTemperature: Single;
     FTopK: UInt32;
     FTopP: Single;
-
 
     function  LoadClibsDLL(): Boolean;
     procedure UnloadCLibsDLL();
@@ -553,9 +599,62 @@ type
     /// </param>
     procedure GetPerformance(AInputTokens, AOutputTokens: PUInt32; ASpeed, ATime: PDouble);
 
+    /// <summary>
+    ///   Performs a web search using the configured API key.
+    ///   This function sends the provided query to the web search service and returns
+    ///   relevant results as a string.
+    /// </summary>
+    /// <param name="AQuery">
+    ///   The search query to be executed.
+    /// </param>
+    /// <returns>
+    ///   A string containing the search results in a structured format.
+    /// </returns>
     class function WebSearch(const AQuery: string): string;
 
-    class function TextToSpeech(const AInputText: string; const AOutputFile: string='speech.wav'; const AVoice: TphTTSVoices=phBella; const ALanguage: TphLanguages=phUS): Boolean;
+    /// <summary>
+    ///   Converts text input into speech and saves it as an audio file.
+    ///   This function utilizes a text-to-speech (TTS) service to generate spoken
+    ///   audio from the provided text.
+    /// </summary>
+    /// <param name="AInputText">
+    ///   The text to be converted into speech.
+    /// </param>
+    /// <param name="AOutputFile">
+    ///   The filename where the generated speech audio will be saved.
+    ///   Defaults to <c>'speech.wav'</c>.
+    /// </param>
+    /// <param name="AVoice">
+    ///   The voice model to use for speech generation.
+    ///   Defaults to <c>phBella</c>.
+    /// </param>
+    /// <param name="ALanguage">
+    ///   The language model to be used for speech synthesis.
+    ///   Defaults to <c>phUS</c> (American English).
+    /// </param>
+    /// <returns>
+    ///   <c>True</c> if the text was successfully converted into speech and saved;
+    ///   otherwise, <c>False</c>.
+    /// </returns>
+    class function TextToSpeech(const AInputText: string; const AOutputFile: string = 'speech.wav';
+      const AVoice: TphTTSVoices = phBella; const ALanguage: TphLanguages = phUS): Boolean;
+
+    /// <summary>
+    ///   Generates embeddings for the provided input text.
+    ///   This function returns a numerical representation of the text, suitable for
+    ///   semantic search, similarity comparisons, and AI applications.
+    /// </summary>
+    /// <param name="ARole">
+    ///   Specifies the role of the embedding, either as a document or a query.
+    /// </param>
+    /// <param name="AInputs">
+    ///   An array of strings for which embeddings should be generated.
+    /// </param>
+    /// <returns>
+    ///   A two-dimensional array of floating-point values, where each sub-array
+    ///   represents the embedding vector for a corresponding input string.
+    /// </returns>
+    class function Embeddings(const ARole: TphEmbedRole; const AInputs: array of string): TArray<TArray<Single>>;
 
     /// <summary>
     ///   Constructs a <c>phinx.model</c> file from a specified folder containing
@@ -579,6 +678,28 @@ type
     /// </returns>
     class function BuildModel(const AFolder: string; const AFilename: string;
       const AProgressEvent: TphBuildModelProgressEvent = nil): Boolean;
+
+    /// <summary>
+    ///   Prints an ASCII logo to the console with customizable colors for different sections.
+    ///   This method is typically used to display branding or identification information
+    ///   when starting the application.
+    /// </summary>
+    /// <param name="ATitleColor">
+    ///   The color code for the main title of the logo.
+    ///   Defaults to <c>phCSIDim + phCSIFGGreen</c>.
+    /// </param>
+    /// <param name="AVersionColor">
+    ///   The color code for the version number displayed within the logo.
+    ///   Defaults to <c>phCSIDim + phCSIFGWhite</c>.
+    /// </param>
+    /// <param name="ASubTitleColor">
+    ///   The color code for the subtitle or additional information in the logo.
+    ///   Defaults to <c>phCSIDim + phCSIFGMagenta</c>.
+    /// </param>
+    class procedure PrintLogo(const ATitleColor: string = {phCSIDim +} phCSIFGGreen;
+      const AVersionColor: string = {phCSIDim +} phCSIFGWhite;
+      const ASubTitleColor: string = {phCSIDim +} phCSIFGMagenta);
+
   end;
 
 implementation
@@ -1337,6 +1458,19 @@ begin
   Result := phUtils.LemonfoxTTS(phUtils.GetEnvVarValue(CphTextToSpeechApiKey), AInputText, AOutputFile, LVoice, LLang, 'wav', 1.0, False);
 end;
 
+class function TPhinx.Embeddings(const ARole: TphEmbedRole; const AInputs: array of string): TArray<TArray<Single>>;
+var
+  LRole: string;
+begin
+  case ARole of
+    phDocument: LRole := 'document';
+    phQuery   : LRole := 'query';
+  end;
+
+  Result := phUtils.JinaEmbeddings(phUtils.GetEnvVarValue(cphJinaApiKey), AInputs, LRole);
+
+end;
+
 procedure TPhinx_BuildModelCallback(const AFilename: PWideChar; const APercentage: Integer; const ANewFile: Boolean; const AUserData: Pointer); cdecl;
 var
   LEvent: TphBuildModelProgressEvent;
@@ -1362,6 +1496,20 @@ begin
   LFolder := AFolder;
   LFilename := AFilename;
   Result := vfolder_build(PWideChar(LFolder), PWideChar(LFilename), TPhinx_BuildModelCallback, TProc(AProgressEvent));
+end;
+
+class procedure TPhinx.PrintLogo(const ATitleColor: string; const AVersionColor: string; const ASubTitleColor: string);
+begin
+  phConsole.PrintLn('%s   ___ _    _', [ATitleColor]);
+  phConsole.PrintLn('%s  | _ \ |_ (_)_ _ __ __™', [ATitleColor]);
+  phConsole.PrintLn('%s  |  _/ '' \| | '' \\ \ /', [ATitleColor]);
+  phConsole.PrintLn('%s  |_| |_||_|_|_||_/_\_\', [ATitleColor]);
+  phConsole.PrintLn('%s         v%s           ', [AVersionColor, CphVersion]);
+  phConsole.PrintLn('%s                       ', [ASubTitleColor]);
+  phConsole.PrintLn('%s  A High-Performance AI', [ASubTitleColor]);
+  phConsole.PrintLn('%s  Inference Library for', [ASubTitleColor]);
+  phConsole.PrintLn('%s     ONNX and Phi-4', [ASubTitleColor]);
+  phConsole.PrintLn();
 end;
 
 { ============================================================================ }

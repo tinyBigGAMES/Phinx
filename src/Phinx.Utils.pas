@@ -181,6 +181,7 @@ type
     class function  GetRandomThinkingResult(): string;
     class function  TavilyWebSearch(const AAPIKey, AQuery: string): string; static;
     class function  LemonfoxTTS(const AAPIKey: string; const AInputText: string; const AOutputFile: string='speech.wav'; const AVoice: string='bella'; const ALanguage: string='en'; const AFormat: string='wav'; const ASpeed: Single=1.0; const AWordTimestamps: Boolean=False): Boolean; static;
+    class function  JinaEmbeddings(const AApiKey: string; const AInputs: array of string; const ARole: string = 'document'; AModel: string='jina-clip-v2'; const ADimensions: Integer = 1024; const ANormalize: Boolean = True; const AEmbeddingType: string = 'float'): TArray<TArray<Single>>; static;
 
   end;
 
@@ -1605,6 +1606,130 @@ begin
   end;
 end;
 
+class function phUtils.JinaEmbeddings(const AApiKey: string; const AInputs: array of string; const ARole: string; AModel: string; const ADimensions: Integer; const ANormalize: Boolean; const AEmbeddingType: string): TArray<TArray<Single>>;
+const
+  JINA_API_URL = 'https://api.jina.ai/v1/embeddings';
+var
+  LHttpClient: THttpClient;
+  LRequestBody: TStringStream;
+  LResponse: IHTTPResponse;
+  LJsonRequest, LJsonResponse, LJsonEmbedding: TJSONObject;
+  LInputArray, LEmbeddingsArray: TJSONArray;
+  I, J: Integer;
+
+  LDataArray: TJSONArray;
+  LEmbeddingObject: TJSONObject;
+
+  // Function to check if a string is Base64 encoded
+  function IsBase64(const S: string): Boolean;
+  const
+    Base64Chars = ['A'..'Z', 'a'..'z', '0'..'9', '+', '/', '='];
+  var
+    I, LLen: Integer;
+  begin
+    Result := False;
+    LLen := Length(S);
+
+    // Base64 should be at least 4 characters and multiple of 4
+    if (LLen < 4) or (LLen mod 4 <> 0) then
+      Exit;
+
+    // Check if all characters are valid Base64
+    for I := 1 to LLen do
+    begin
+      if not CharInSet(S[I], Base64Chars) then
+        Exit;
+    end;
+
+    // If the string passes all checks, assume it's Base64
+    Result := True;
+  end;
+
+begin
+  SetLength(Result, 0);
+
+  LHttpClient := THttpClient.Create;
+  try
+    LHttpClient.CustomHeaders['Authorization'] := 'Bearer ' + AApiKey;
+    LHttpClient.ContentType := 'application/json';
+
+    LJsonRequest := TJSONObject.Create;
+    try
+      LJsonRequest.AddPair('model', AModel);
+      LJsonRequest.AddPair('dimensions', TJSONNumber.Create(ADimensions));
+      LJsonRequest.AddPair('normalized', TJSONBool.Create(ANormalize));
+      LJsonRequest.AddPair('embedding_type', AEmbeddingType);
+      if ARole = 'query' then
+        LJsonRequest.AddPair('task', 'retrieval.query');
+
+      // Add Inputs (Supports text, image URLs, and Base64 images)
+      LInputArray := TJSONArray.Create;
+      for I := 0 to High(AInputs) do
+      begin
+        LJsonEmbedding := TJSONObject.Create;
+
+        if Pos('http', AInputs[I]) = 1 then
+          LJsonEmbedding.AddPair('image', AInputs[I])  // If input is an image URL
+        else if IsBase64(AInputs[I]) then
+          LJsonEmbedding.AddPair('image', AInputs[I])  // If input is Base64
+        else
+          LJsonEmbedding.AddPair('text', AInputs[I]);  // If input is text
+
+        LInputArray.AddElement(LJsonEmbedding);
+      end;
+      LJsonRequest.AddPair('input', LInputArray);
+
+      LRequestBody := TStringStream.Create(LJsonRequest.ToString, TEncoding.UTF8);
+      try
+        LResponse := LHttpClient.Post(JINA_API_URL, LRequestBody);
+        if LResponse.StatusCode <> 200 then
+          raise Exception.CreateFmt('Jina API request failed: %d - %s', [LResponse.StatusCode, LResponse.StatusText]);
+
+        LJsonResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8)) as TJSONObject;
+        try
+          if not Assigned(LJsonResponse) then
+            raise Exception.Create('Invalid JSON response from Jina API.');
+
+          // Handle API errors if response contains "error" field
+          if LJsonResponse.GetValue('error') <> nil then
+            raise Exception.Create('Jina API Error: ' + LJsonResponse.GetValue('error').Value);
+
+          // Check if "data" exists and is a valid array
+          LDataArray := LJsonResponse.GetValue('data') as TJSONArray;
+          if not Assigned(LDataArray) then
+            raise Exception.Create('"data" field is missing or not an array.');
+
+          SetLength(Result, LDataArray.Count);
+
+          // Iterate through each embedding entry
+          for I := 0 to LDataArray.Count - 1 do
+          begin
+            LEmbeddingObject := LDataArray.Items[I] as TJSONObject;
+
+            // Get the actual "embedding" array
+            LEmbeddingsArray := LEmbeddingObject.GetValue('embedding') as TJSONArray;
+            if not Assigned(LEmbeddingsArray) then
+              raise Exception.CreateFmt('Missing "embedding" field in entry %d.', [I]);
+
+            // Store embedding values
+            SetLength(Result[I], LEmbeddingsArray.Count);
+            for J := 0 to LEmbeddingsArray.Count - 1 do
+              Result[I][J] := LEmbeddingsArray.Items[J].AsType<Double>;
+          end;
+
+        finally
+          LJsonResponse.Free;
+        end;
+      finally
+        LRequestBody.Free;
+      end;
+    finally
+      LJsonRequest.Free;
+    end;
+  finally
+    LHttpClient.Free;
+  end;
+end;
 
 { phConsole }
 class constructor phConsole.Create();

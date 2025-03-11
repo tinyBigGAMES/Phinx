@@ -46,6 +46,12 @@
       - Create a an environment variable named "LEMONFOX_API_KEY" and set it to
         the tts api key.
 
+   - Get jina.ai key from:
+      - https://jina.ai/
+      - 1M free tokens
+      - Create a an environment variable named "JINA_API_KEY" and set it to
+        the jina api key.
+
   Additional Information:
    - Developed with: Delphi 12.2
    - Tested on: Windows 11 (24H2)
@@ -866,10 +872,9 @@ end;
  predefined text input, generates an audio file, and plays the output using an
  internal WAV player.
 ------------------------------------------------------------------------------ }
+procedure Test08();
 const
   CSpeechFilename = 'speech.wav'; // Filename for the generated speech output
-
-procedure Test08();
 var
   LPhinx: TPhinx; // Instance of TPhinx for text-to-speech conversion
   LQuestion: string; // Stores the text input to be converted to speech
@@ -915,6 +920,38 @@ begin
   end;
 end;
 
+{ -----------------------------------------------------------------------------
+ Test09: Vector Embeddings
+ This procedure utilizes Phinx to generate vector embeddings for the given text
+ inputs. The resulting embeddings are printed to the console.
+------------------------------------------------------------------------------ }
+procedure Test09();
+var
+  LEmbs: TArray<TArray<Single>>; // Stores the generated vector embeddings
+  I, J: Integer; // Loop variables for iterating over embeddings
+begin
+  // Set the console title
+  phConsole.SetTitle('Phinx: Vector Embeddings');
+
+  // Generate embeddings for the given text inputs
+  LEmbs := TPhinx.Embeddings(phDocument,
+    ['Delphi is a programming language based on Object Pascal.',
+    'Jina AI provides cloud-based embedding solutions.']);
+
+  // Print embeddings
+  for I := 0 to High(LEmbs) do
+  begin
+    phConsole.PrintLn('Embedding for Input %d:', [I + 1]);
+    for J := 0 to High(LEmbs[I]) do
+    begin
+      phConsole.Print(phCSIFGGreen+'%.6f ', [LEmbs[I][J]]);
+    end;
+    phConsole.PrintLn(phCRLF);
+  end;
+
+  // Pause the console to allow user review before exiting
+  phConsole.Pause();
+end;
 
 { -----------------------------------------------------------------------------
  RunTests: Execute Phinx Test Cases
@@ -926,8 +963,8 @@ procedure RunTests();
 var
   LNum: Integer; // Variable to store test case number
 begin
-  // Display Phinx version information
-  phConsole.PrintLn(phCSIFGMagenta+'Phinx v%s'+phCRLF, [CphVersion]);
+  // Display Phinx ASCII logo
+  TPhinx.PrintLogo();
 
   // Set the test number to an example to run
   LNum := 01;
@@ -943,6 +980,7 @@ begin
     06: Test06(); // Run Test06 (Audio Transcribe/Translation)
     07: Test07(); // Run Test07 (Web Search)
     08: Test08(); // Run Test08 (Text-to-Speech)
+    09: Test09(); // Run Test09 (Vector Embeddings)
   end;
 end;
 
